@@ -1,106 +1,123 @@
 import streamlit as st
 
-st.set_page_config(page_title="Chat Quiz", layout="centered")
+st.set_page_config(page_title="Quiz Challenge", layout="centered")
 
-# ✅ 音效链接（你也可以换成自己的 mp3）
+# ✅ Audio
 SUCCESS_SOUND = "https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"
 FAIL_SOUND = "https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg"
 
-def play_sound(sound_url):
+def play_sound(url):
     st.markdown(
         f"""
         <audio autoplay>
-            <source src="{sound_url}" type="audio/mpeg">
+            <source src="{url}" type="audio/mpeg">
         </audio>
         """,
         unsafe_allow_html=True,
     )
 
-# ✅ 题库
-questions = [
-    {
-        "question": "Lkr 什么时候出生？",
-        "options": ["2000", "2001", "2002", "2003"],
-        "answer": "2002"
-    },
-    {
-        "question": "这是谁的照片？",
-        "options": ["小王", "Lkr", "张三"],
-        "answer": "Lkr",
-        "image": "profile photo.jpg"
-    },
-    {
-        "question": "How long is my dick (answer in cm)?",
-        "answer": "15"
-    },
-    {
-        "question": "How many times can I have sex at one night?",
-        "answer": "7"
-    }
-]
+# ✅ Topic-based question banks
+TOPIC_QUESTIONS = {
+    "Astronomy": [
+        {"question": "Which planet is known as the Red Planet?", "options": ["Earth", "Mars", "Venus"], "answer": "Mars"},
+        {"question": "How many moons does Earth have?", "answer": "1"},
+    ],
+    "History": [
+        {"question": "In which year did World War II end?", "options": ["1943", "1945", "1950"], "answer": "1945"},
+        {"question": "Who was the first president of the United States?", "answer": "George Washington"},
+    ],
+    "Entertainment": [
+        {"question": "When was Lkr born?", "options": ["2000", "2001", "2002", "2003"], "answer": "2002"},
+        {"question": "Who is shown in this photo?", "options": ["Xiao Wang", "Lkr", "Zhang San"], "answer": "Lkr", "image": "profile photo.jpg"},
+    ]
+}
 
-# ✅ 初始化状态
+# ✅ Initialize state
+if "started" not in st.session_state:
+    st.session_state.started = False
+if "topic" not in st.session_state:
+    st.session_state.topic = None
+if "questions" not in st.session_state:
+    st.session_state.questions = []
 if "step" not in st.session_state:
     st.session_state.step = 0
+if "failed" not in st.session_state:
     st.session_state.failed = False
+if "completed" not in st.session_state:
     st.session_state.completed = False
-    st.session_state.history = []  # 存储所有问答历史
+if "history" not in st.session_state:
+    st.session_state.history = []
 
 def restart():
+    st.session_state.started = False
+    st.session_state.topic = None
+    st.session_state.questions = []
     st.session_state.step = 0
     st.session_state.failed = False
     st.session_state.completed = False
     st.session_state.history = []
-    # st.rerun()
 
-# ✅ 显示历史问答记录
+# ✅ Title and Instructions
+st.title("🧠 Quiz Challenge Game")
+st.caption("You must answer all questions correctly to win.")
+
+# ✅ Topic Selection
+if not st.session_state.started:
+    st.subheader("Select a topic to begin:")
+    topic = st.radio("Choose your challenge topic:", list(TOPIC_QUESTIONS.keys()), key="topic_selector")
+    if st.button("Start"):
+        st.session_state.topic = topic
+        st.session_state.questions = TOPIC_QUESTIONS[topic]
+        st.session_state.started = True
+        st.rerun()
+    st.stop()
+
+# ✅ Display chat history
 for entry in st.session_state.history:
     st.chat_message("assistant").markdown(entry["question"])
-    if entry.get("image"):  # 修复 image 为 None 的情况
-        st.image(entry["image"], caption="参考图片", use_container_width=True)
+    if entry.get("image"):
+        st.image(entry["image"], caption="Reference Image", use_container_width=True)
     st.chat_message("user").markdown(entry["user_answer"])
 
-# ✅ 主流程控制
+# ✅ Game in progress
 if not st.session_state.failed and not st.session_state.completed:
     curr = st.session_state.step
-    q = questions[curr]
+    q = st.session_state.questions[curr]
 
-    # 当前问题展示
     with st.chat_message("assistant"):
         st.markdown(q["question"])
         if q.get("image"):
-            st.image(q["image"], caption="参考图片", use_container_width=True)
+            st.image(q["image"], caption="Reference Image", use_container_width=True)
         if "options" in q:
-            st.markdown("选项：" + ", ".join(q["options"]))
+            st.markdown("Options: " + ", ".join(q["options"]))
 
-    # 用户输入答案
-    user_input = st.chat_input("请输入你的答案")
+    user_input = st.chat_input("Your answer:")
 
     if user_input:
-        # 保存问答历史
+        # Record
         st.session_state.history.append({
             "question": q["question"],
             "user_answer": user_input,
-            "image": q.get("image", None)
+            "image": q.get("image")
         })
 
-        # 判断正误
+        # Check answer
         if user_input.strip() == q["answer"]:
             st.session_state.step += 1
-            if st.session_state.step >= len(questions):
+            if st.session_state.step >= len(st.session_state.questions):
                 st.session_state.completed = True
                 play_sound(SUCCESS_SOUND)
-                st.chat_message("assistant").success("🎉 恭喜你通关成功！")
+                st.chat_message("assistant").success("🎉 Congratulations! You completed the challenge!")
                 st.chat_message("assistant").button("Restart", on_click=restart)
             else:
                 st.rerun()
         else:
             st.session_state.failed = True
             play_sound(FAIL_SOUND)
-            st.chat_message("assistant").error("❌ 回答错误，闯关失败。")
+            st.chat_message("assistant").error("❌ Incorrect answer. Game over.")
             st.chat_message("assistant").button("Restart", on_click=restart)
 
-# ✅ 结尾兜底 Restart（防止没按钮）
+# ✅ Restart if done or failed
 elif st.session_state.failed or st.session_state.completed:
     if st.button("Restart"):
         restart()
